@@ -1,0 +1,36 @@
+{% extends 'base.html' %}
+
+{% block title %}Dashboard - Python SSO{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2 class="mb-4">Your Applications</h2>
+    {% if providers %}
+    <div class="row">
+        {% for provider in providers %}
+        <div class="col-md-4 mb-4">
+            <div class="card h-100">
+                <div class="card-body d-flex flex-column">
+                    <h5 class="card-title">{{ provider.name }}</h5>
+                    <p class="card-text">{{ provider.description or 'No description provided.' }}</p>
+                    <div class="mt-auto">
+                        {% if provider.protocol == 'saml' and (provider.entity_id and 'aws' in provider.entity_id.lower() or provider.name and 'aws' in provider.name.lower()) %}
+                        <a href="{{ url_for('auth.saml_aws', sp_id=provider.id) }}" class="btn btn-primary w-100">Login to AWS</a>
+                        {% elif provider.protocol == 'saml' and (provider.entity_id and 'jenkins' in provider.entity_id.lower() or provider.name and 'jenkins' in provider.name.lower()) %}
+                        <a href="{{ url_for('auth.saml_jenkins', sp_id=provider.id) }}" class="btn btn-primary w-100">Login to Jenkins</a>
+                        {% elif provider.protocol == 'saml' %}
+                        <a href="{{ url_for('auth.saml_login', sp_id=provider.id) }}" class="btn btn-primary w-100">Login with SAML</a>
+                        {% elif provider.protocol == 'oidc' %}
+                        <a href="{{ url_for('auth.oidc_login', sp_id=provider.id) }}" class="btn btn-success w-100">Login with OIDC</a>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="alert alert-info">No applications are currently configured for SSO.</div>
+    {% endif %}
+</div>
+{% endblock %}    

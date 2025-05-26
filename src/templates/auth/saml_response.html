@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Processing SAML Response</title>
+</head>
+<body onload="document.forms[0].submit()">
+    <form method="post" action="{{ acs_url }}">
+        <input type="hidden" name="SAMLResponse" value="{{ saml_response }}" />
+        {% if relay_state %}
+        <input type="hidden" name="RelayState" value="{{ relay_state }}" />
+        {% endif %}
+        <noscript>
+            <p>Please click the submit button to continue:</p>
+            <input type="submit" value="Submit" />
+        </noscript>
+    </form>
+</body>
+</html> 

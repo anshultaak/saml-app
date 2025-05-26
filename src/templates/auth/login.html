@@ -1,0 +1,67 @@
+{% extends 'base.html' %}
+
+{% block title %}Login - Python SSO{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h4 class="mb-0">Admin Login</h4>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('auth.login') }}">
+                    <div class="mb-3">
+                        <label for="username" class="form-label">Username</label>
+                        <input type="text" class="form-control" id="username" name="username" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="password" class="form-label">Password</label>
+                        <input type="password" class="form-control" id="password" name="password" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Login</button>
+                </form>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h4 class="mb-0">SSO Login</h4>
+            </div>
+            <div class="card-body">
+                <h5 class="card-title">Choose a login method:</h5>
+                
+                {% if providers %}
+                <div class="list-group mt-3">
+                    {% for provider in providers %}
+                    {% if provider.protocol == 'saml' %}
+                    <a href="{{ url_for('auth.saml_login', sp_id=provider.id, next=request.args.get('next')) }}" 
+                       class="list-group-item list-group-item-action">
+                        <div class="d-flex w-100 justify-content-between">
+                            <h5 class="mb-1">{{ provider.name }}</h5>
+                            <small>SAML 2.0</small>
+                        </div>
+                        <p class="mb-1">{{ provider.description or 'Login with SAML 2.0' }}</p>
+                    </a>
+                    {% elif provider.protocol == 'oidc' %}
+                    <a href="{{ url_for('auth.oidc_login', sp_id=provider.id, next=request.args.get('next')) }}" 
+                       class="list-group-item list-group-item-action">
+                        <div class="d-flex w-100 justify-content-between">
+                            <h5 class="mb-1">{{ provider.name }}</h5>
+                            <small>OpenID Connect</small>
+                        </div>
+                        <p class="mb-1">{{ provider.description or 'Login with OpenID Connect' }}</p>
+                    </a>
+                    {% endif %}
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="alert alert-warning">
+                    No authentication providers configured. Please contact the administrator.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

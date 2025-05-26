@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Jenkins SAML Response</title>
+</head>
+<body>
+    <form id="saml-form" method="post" action="{{ acs_url }}">
+        <input type="hidden" name="SAMLResponse" value="{{ saml_response }}" />
+        {% if relay_state %}
+        <input type="hidden" name="RelayState" value="{{ relay_state }}" />
+        {% endif %}
+        <noscript>
+            <p>Note: Since your browser does not support JavaScript, you must press the Continue button once to proceed.</p>
+            <button type="submit">Continue</button>
+        </noscript>
+    </form>
+    <script>
+        document.getElementById('saml-form').submit();
+    </script>
+</body>
+</html>

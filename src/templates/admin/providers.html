@@ -1,0 +1,83 @@
+{% extends 'base.html' %}
+
+{% block title %}Service Providers - Python SSO{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h4 class="mb-0">Service Providers</h4>
+                <a href="{{ url_for('admin.new_provider') }}" class="btn btn-primary">Add Provider</a>
+            </div>
+            <div class="card-body">
+                {% if providers %}
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Protocol</th>
+                                <th>Description</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for provider in providers %}
+                            <tr>
+                                <td>{{ provider.name }}</td>
+                                <td>{{ provider.protocol.upper() }}</td>
+                                <td>{{ provider.description or 'No description' }}</td>
+                                <td>
+                                    {% if provider.active %}
+                                    <span class="badge bg-success">Active</span>
+                                    {% else %}
+                                    <span class="badge bg-danger">Inactive</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="btn-group" role="group">
+                                        <a href="{{ url_for('admin.edit_provider', sp_id=provider.id) }}" class="btn btn-sm btn-outline-primary">Edit</a>
+                                        {% if provider.protocol == 'saml' %}
+                                        <a href="{{ url_for('auth.saml_metadata', sp_id=provider.id) }}" class="btn btn-sm btn-outline-info" target="_blank">Metadata</a>
+                                        {% endif %}
+                                        <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteModal{{ provider.id }}">Delete</button>
+                                    </div>
+                                    
+                                    <!-- Delete Modal -->
+                                    <div class="modal fade" id="deleteModal{{ provider.id }}" tabindex="-1" aria-labelledby="deleteModalLabel{{ provider.id }}" aria-hidden="true">
+                                        <div class="modal-dialog">
+                                            <div class="modal-content">
+                                                <div class="modal-header">
+                                                    <h5 class="modal-title" id="deleteModalLabel{{ provider.id }}">Confirm Delete</h5>
+                                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                                </div>
+                                                <div class="modal-body">
+                                                    Are you sure you want to delete the service provider "{{ provider.name }}"?
+                                                </div>
+                                                <div class="modal-footer">
+                                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                                    <form action="{{ url_for('admin.delete_provider', sp_id=provider.id) }}" method="post">
+                                                        <button type="submit" class="btn btn-danger">Delete</button>
+                                                    </form>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="alert alert-info">
+                    No service providers configured yet. <a href="{{ url_for('admin.new_provider') }}">Add your first provider</a>.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

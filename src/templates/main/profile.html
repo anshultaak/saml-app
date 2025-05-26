@@ -1,0 +1,58 @@
+{% extends 'base.html' %}
+
+{% block title %}Profile - Python SSO{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8 offset-md-2">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="mb-0">User Profile</h4>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-md-3 fw-bold">Username:</div>
+                    <div class="col-md-9">{{ current_user.username }}</div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-3 fw-bold">Email:</div>
+                    <div class="col-md-9">{{ current_user.email }}</div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-3 fw-bold">Account Created:</div>
+                    <div class="col-md-9">{{ current_user.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-3 fw-bold">Admin Access:</div>
+                    <div class="col-md-9">{{ 'Yes' if current_user.is_admin else 'No' }}</div>
+                </div>
+                
+                <h5 class="mt-4 mb-3">Linked Identities</h5>
+                {% set identities = current_user.get_identities() %}
+                {% if identities %}
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Provider</th>
+                            <th>Provider ID</th>
+                            <th>Linked Date</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for identity in identities %}
+                        <tr>
+                            <td>{{ identity.provider.upper() }}</td>
+                            <td>{{ identity.provider_user_id }}</td>
+                            <td>{{ identity.created_at.strftime('%Y-%m-%d') }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <div class="alert alert-info">No linked identities found.</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

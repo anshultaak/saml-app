@@ -1,0 +1,44 @@
+{% extends 'base.html' %}
+
+{% block title %}Home - Python SSO{% endblock %}
+
+{% block content %}
+<div class="jumbotron">
+    <h1 class="display-4">Python SSO Application</h1>
+    <p class="lead">A Single Sign-On solution supporting both SAML 2.0 and OpenID Connect.</p>
+    <hr class="my-4">
+    <p>This application allows you to integrate with multiple cloud services using industry-standard authentication protocols.</p>
+    
+    {% if current_user.is_authenticated %}
+    <p>Welcome back, {{ current_user.username }}!</p>
+    <a class="btn btn-primary btn-lg" href="{{ url_for('main.profile') }}" role="button">View Profile</a>
+    {% else %}
+    <a class="btn btn-primary btn-lg" href="{{ url_for('auth.login') }}" role="button">Login</a>
+    {% endif %}
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">SAML 2.0 Integration</h5>
+            </div>
+            <div class="card-body">
+                <p>SAML 2.0 (Security Assertion Markup Language) is an XML-based protocol that allows secure web domains to exchange user authentication and authorization data.</p>
+                <p>Our SSO application supports SAML 2.0 for seamless integration with enterprise applications and cloud services.</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">OpenID Connect Integration</h5>
+            </div>
+            <div class="card-body">
+                <p>OpenID Connect (OIDC) is an identity layer built on top of the OAuth 2.0 protocol, providing authentication and authorization for modern applications.</p>
+                <p>Our SSO application supports OIDC for integration with modern web and mobile applications.</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

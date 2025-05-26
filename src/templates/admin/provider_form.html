@@ -1,0 +1,211 @@
+{% extends 'base.html' %}
+
+{% block title %}
+{% if provider %}Edit{% else %}New{% endif %} Service Provider - Python SSO
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8 offset-md-2">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="mb-0">{% if provider %}Edit{% else %}New{% endif %} Service Provider</h4>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    <div class="mb-3">
+                        <label for="name" class="form-label">Name</label>
+                        <input type="text" class="form-control" id="name" name="name" value="{{ provider.name if provider else '' }}" required>
+                        <div class="form-text">A friendly name for this service provider.</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Description</label>
+                        <textarea class="form-control" id="description" name="description" rows="2">{{ provider.description if provider else '' }}</textarea>
+                        <div class="form-text">Optional description of this service provider.</div>
+                    </div>
+                    
+                    {% if not provider %}
+                    <div class="mb-3">
+                        <label for="protocol" class="form-label">Protocol</label>
+                        <select class="form-select" id="protocol" name="protocol" required>
+                            <option value="">Select a protocol</option>
+                            <option value="saml">SAML 2.0</option>
+                            <option value="oidc">OpenID Connect</option>
+                        </select>
+                        <div class="form-text">The authentication protocol used by this service provider.</div>
+                    </div>
+                    {% else %}
+                    <div class="mb-3">
+                        <label class="form-label">Protocol</label>
+                        <input type="text" class="form-control" value="{{ provider.protocol.upper() }}" readonly>
+                        <input type="hidden" name="protocol" value="{{ provider.protocol }}">
+                    </div>
+                    {% endif %}
+                    
+                    <div id="saml-fields" class="protocol-fields" {% if provider and provider.protocol != 'saml' %}style="display: none;"{% endif %}>
+                        <h5 class="mt-4 mb-3">SAML 2.0 Configuration</h5>
+                        
+                        <div class="mb-3">
+                            <label for="entity_id" class="form-label">Entity ID</label>
+                            <input type="text" class="form-control" id="entity_id" name="entity_id" value="{{ provider.entity_id if provider and provider.protocol == 'saml' else '' }}">
+                            <div class="form-text">The unique identifier for this SAML service provider.</div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="metadata_url" class="form-label">Metadata URL</label>
+                            <input type="url" class="form-control" id="metadata_url" name="metadata_url" value="{{ provider.metadata_url if provider and provider.protocol == 'saml' else '' }}">
+                            <div class="form-text">The URL where the service provider's SAML metadata can be found.</div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="acs_url" class="form-label">ACS URL</label>
+                            <input type="url" class="form-control" id="acs_url" name="acs_url" value="{{ provider.acs_url if provider and provider.protocol == 'saml' else '' }}">
+                            <div class="form-text">The Assertion Consumer Service URL of the service provider.</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="sso_url" class="form-label">SSO URL</label>
+                            <input type="url" class="form-control" id="sso_url" name="sso_url" value="{{ provider.sso_url if provider and provider.protocol == 'saml' else '' }}">
+                            <div class="form-text">The Single Sign-On URL of the Identity Provider.</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="slo_url" class="form-label">SLO URL</label>
+                            <input type="url" class="form-control" id="slo_url" name="slo_url" value="{{ provider.slo_url if provider and provider.protocol == 'saml' else '' }}">
+                            <div class="form-text">The Single Logout URL of the Identity Provider.</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="x509cert" class="form-label">IdP Certificate</label>
+                            <textarea class="form-control" id="x509cert" name="x509cert" rows="5">{{ provider.x509cert if provider and provider.protocol == 'saml' else '' }}</textarea>
+                            <div class="form-text">The X.509 certificate from the Identity Provider (used for signature verification).</div>
+                        </div>
+                    </div>
+                    
+                    <div id="aws-fields" class="protocol-fields" style="display: none;">
+                        <h5 class="mt-4 mb-3">AWS SSO Configuration</h5>
+                        
+                        <div class="mb-3">
+                            <label for="aws_account_id" class="form-label">AWS Account ID</label>
+                            <input type="text" class="form-control" id="aws_account_id" name="aws_account_id" value="{{ provider.aws_account_id if provider else '' }}">
+                            <div class="form-text">The AWS Account ID (12-digit number)</div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="aws_role" class="form-label">AWS Role Name</label>
+                            <input type="text" class="form-control" id="aws_role" name="aws_role" value="{{ provider.aws_role if provider else '' }}">
+                            <div class="form-text">The role name (without the full ARN)</div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="aws_provider" class="form-label">AWS SAML Provider Name</label>
+                            <input type="text" class="form-control" id="aws_provider" name="aws_provider" value="{{ provider.aws_provider if provider else '' }}">
+                            <div class="form-text">The SAML provider name (without the full ARN)</div>
+                        </div>
+                    </div>
+                    
+                    <div id="oidc-fields" class="protocol-fields" {% if provider and provider.protocol != 'oidc' %}style="display: none;"{% endif %}>
+                        <h5 class="mt-4 mb-3">OpenID Connect Configuration</h5>
+                        
+                        <div class="mb-3">
+                            <label for="client_id" class="form-label">Client ID</label>
+                            <input type="text" class="form-control" id="client_id" name="client_id" value="{{ provider.client_id if provider and provider.protocol == 'oidc' else '' }}">
+                            <div class="form-text">The client ID provided by the OIDC provider.</div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="client_secret" class="form-label">Client Secret</label>
+                            <input type="password" class="form-control" id="client_secret" name="client_secret" value="{{ provider.client_secret if provider and provider.protocol == 'oidc' else '' }}">
+                            <div class="form-text">The client secret provided by the OIDC provider.</div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="metadata_url_oidc" class="form-label">Discovery Document URL</label>
+                            <input type="url" class="form-control" id="metadata_url_oidc" name="metadata_url" value="{{ provider.metadata_url if provider and provider.protocol == 'oidc' else '' }}">
+                            <div class="form-text">The URL of the OIDC provider's discovery document (usually ends with .well-known/openid-configuration).</div>
+                        </div>
+                    </div>
+                    
+                    {% if provider %}
+                    <div class="mb-3 form-check">
+                        <input type="checkbox" class="form-check-input" id="active" name="active" {% if provider.active %}checked{% endif %}>
+                        <label class="form-check-label" for="active">Active</label>
+                        <div class="form-text">Uncheck to temporarily disable this service provider.</div>
+                    </div>
+                    {% endif %}
+                    
+                    <div class="d-flex justify-content-between mt-4">
+                        <a href="{{ url_for('admin.providers') }}" class="btn btn-secondary">Cancel</a>
+                        <button type="submit" class="btn btn-primary">Save</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const protocolSelect = document.getElementById('protocol');
+        const samlFields = document.getElementById('saml-fields');
+        const oidcFields = document.getElementById('oidc-fields');
+        const awsFields = document.getElementById('aws-fields');
+        
+        function checkAwsProvider() {
+            const entityIdField = document.getElementById('entity_id');
+            const nameField = document.getElementById('name');
+            
+            // Show AWS fields if name or entity_id contains 'aws'
+            if ((entityIdField && entityIdField.value && entityIdField.value.toLowerCase().includes('aws')) || 
+                (nameField && nameField.value && nameField.value.toLowerCase().includes('aws'))) {
+                awsFields.style.display = 'block';
+            } else {
+                // Only hide if we're not adding a new AWS provider
+                const isNewProvider = !document.querySelector('input[name="protocol"][type="hidden"]');
+                const isSamlSelected = isNewProvider && protocolSelect && protocolSelect.value === 'saml';
+                
+                // For new providers with SAML selected, keep AWS fields visible if name contains 'aws'
+                if (isNewProvider && isSamlSelected && nameField && nameField.value && nameField.value.toLowerCase().includes('aws')) {
+                    awsFields.style.display = 'block';
+                } else {
+                    awsFields.style.display = 'none';
+                }
+            }
+        }
+        
+        if (protocolSelect) {
+            protocolSelect.addEventListener('change', function() {
+                if (this.value === 'saml') {
+                    samlFields.style.display = 'block';
+                    oidcFields.style.display = 'none';
+                    // Check if it might be an AWS provider
+                    checkAwsProvider();
+                } else if (this.value === 'oidc') {
+                    samlFields.style.display = 'none';
+                    oidcFields.style.display = 'block';
+                    awsFields.style.display = 'none';
+                } else {
+                    samlFields.style.display = 'none';
+                    oidcFields.style.display = 'none';
+                    awsFields.style.display = 'none';
+                }
+            });
+        }
+        
+        // Listen for changes to name or entity_id to detect AWS providers
+        const entityIdField = document.getElementById('entity_id');
+        const nameField = document.getElementById('name');
+        
+        if (entityIdField) {
+            entityIdField.addEventListener('input', checkAwsProvider);
+        }
+        
+        if (nameField) {
+            nameField.addEventListener('input', checkAwsProvider);
+        }
+    });
+</script>
+{% endblock %}
+{% endblock %}

@@ -222,8 +222,8 @@ class SAMLManager:
                 signer = XMLSigner(
                     method=methods.enveloped,
                     c14n_algorithm="http://www.w3.org/2001/10/xml-exc-c14n#",
-                    signature_algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1",
-                    digest_algorithm="http://www.w3.org/2000/09/xmldsig#sha1"
+                    signature_algorithm="http://www.w3.org/2001/04/xmldsig-more#rsa-sha256",
+                    digest_algorithm="http://www.w3.org/2001/04/xmlenc#sha256"
                 )
                 
                 try:

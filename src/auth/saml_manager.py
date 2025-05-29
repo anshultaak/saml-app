@@ -15,8 +15,6 @@ from saml2.saml import NAMEID_FORMAT_EMAILADDRESS as NAMEID_FORMAT_EMAIL, NAMEID
 from .saml_config import SAMLConfig
 from .saml_metadata import SAMLMetadata
 from .saml_response import SAMLResponseBuilder
-from .jenkins_saml import JenkinsSAMLResponseBuilder
-from .github_saml import GitHubSAMLResponseBuilder
 from ..models import User, ServiceProvider
 
 class SAMLManager:
@@ -316,19 +314,7 @@ class SAMLManager:
                     if 'aws' in sp.name.lower():
                         return self.handle_aws_login(sp_id)
                     elif 'jenkins' in sp.name.lower():
-                        # Use Jenkins-specific response builder
-                        saml_response = JenkinsSAMLResponseBuilder.build_jenkins_response(current_user, sp, in_response_to=request_id)
-                        return render_template('auth/saml_post.html',
-                                            acs_url=sp.acs_url,
-                                            saml_response=saml_response,
-                                            relay_state=relay_state)
-                    elif 'github' in sp.name.lower():
-                        # Use GitHub-specific response builder
-                        saml_response = GitHubSAMLResponseBuilder.build_github_response(current_user, sp, in_response_to=request_id)
-                        return render_template('auth/saml_post.html',
-                                            acs_url=sp.acs_url,
-                                            saml_response=saml_response,
-                                            relay_state=relay_state)
+                        return self.handle_jenkins_login(sp_id, relay_state)
                     else:
                         # Use generic response for other SPs
                         saml_response = SAMLResponseBuilder.build_generic_response(current_user, sp, in_response_to=request_id)

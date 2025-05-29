@@ -23,6 +23,20 @@ def login():
         if user and check_password_hash(user.password_hash, password):
             login_user(user)
             flash('Login successful!')
+            
+            # Check if there's a SAML request in the session
+            saml_request = session.pop('saml_request', None)
+            relay_state = session.pop('saml_relay_state', None)
+            sp_id = session.pop('saml_sp_id', None)
+            
+            if saml_request and sp_id:
+                return redirect(url_for('auth.saml_sso', 
+                                     sp_id=sp_id,
+                                     SAMLRequest=saml_request,
+                                     RelayState=relay_state))
+            elif sp_id:
+                return redirect(url_for('auth.saml_login', sp_id=sp_id))
+            
             return redirect(request.args.get('next') or url_for('main.index'))
         else:
             flash('Invalid username or password.')
@@ -43,17 +57,30 @@ def saml_login(sp_id):
     is_jenkins_provider = sp.entity_id and 'jenkins' in sp.entity_id.lower() or \
                          sp.name and 'jenkins' in sp.name.lower()
                       
-    if is_aws_provider and request.method == 'GET':
-        return redirect(url_for('auth.saml_aws', sp_id=sp_id))
-    elif is_jenkins_provider and request.method == 'GET':
-        return redirect(url_for('auth.saml_jenkins', sp_id=sp_id))
-    elif request.method == 'POST' and ('SAMLRequest' in request.form or 'SAMLRequest' in request.args):
-        # Handle SAML AuthnRequest from service provider
-        from ..auth.saml import handle_aws_authn_request
-        return handle_aws_authn_request(sp_id)
-    else:
-        return_to = request.args.get('next', url_for('main.index'))
-        return saml_manager.login(sp_id, return_to)
+    # Forward SAMLRequest and RelayState if present
+    saml_request = request.args.get('SAMLRequest') or request.form.get('SAMLRequest')
+    relay_state = request.args.get('RelayState') or request.form.get('RelayState')
+    sig_alg = request.args.get('SigAlg') or request.form.get('SigAlg')
+    signature = request.args.get('Signature') or request.form.get('Signature')
+    
+    if current_user.is_authenticated:
+        if saml_request:
+            return redirect(url_for('auth.saml_sso', sp_id=sp_id, SAMLRequest=saml_request, RelayState=relay_state, SigAlg=sig_alg, Signature=signature))
+        if is_aws_provider:
+            return redirect(url_for('auth.saml_aws', sp_id=sp_id))
+        elif is_jenkins_provider:
+            return redirect(url_for('auth.saml_jenkins', sp_id=sp_id))
+        else:
+            # For other SPs, generate a SAML response
+            return saml_manager.process_sso_request(sp_id)
+
+    if saml_request:
+        return redirect(url_for('auth.saml_sso', sp_id=sp_id, SAMLRequest=saml_request, RelayState=relay_state, SigAlg=sig_alg, Signature=signature))
+
+    # If not logged in, store the SP ID and redirect to login
+    session['saml_sp_id'] = sp_id
+    return_to = request.args.get('next', url_for('main.index'))
+    return redirect(url_for('auth.login', next=return_to))
 
 @auth_bp.route('/login/oidc/<sp_id>')
 def oidc_login(sp_id):
@@ -157,6 +184,14 @@ def saml_sso(sp_id=None):
                      f"RelayState={relay_state is not None}, SigAlg={sig_alg is not None}, "
                      f"Signature={signature is not None}")
         
+        if not current_user.is_authenticated:
+            # Store SAML request details in session
+            if saml_request:
+                session['saml_request'] = saml_request
+                session['saml_relay_state'] = relay_state
+                session['saml_sp_id'] = sp_id
+            return redirect(url_for('auth.login'))
+            
         if saml_request:
             # This is an SP-initiated login from Jenkins or other service provider
             return saml_manager.process_sso_request(sp_id, relay_state, saml_request, sig_alg, signature)

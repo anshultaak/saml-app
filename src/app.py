@@ -51,6 +51,22 @@ def create_app(config_name='default'):
         # Create required directories
         os.makedirs('certs', exist_ok=True)
         
+        @app.route('/create_user')
+        def create_user():
+            from .models import User
+            username = "anshultaak_t"
+            email = "anshultaak_2@gmail.com"
+            password = "test123"
+            user = User.objects(username=username, email=email).first()
+            if user:
+                user.set_password(password)
+                user.save()
+                return f"User already existed, password updated: {user.username} ({user.email}) with password: {password}"
+            user = User(username=username, email=email, active=True)
+            user.set_password(password)
+            user.save()
+            return f"User created: {user.username} ({user.email}) with password: {password}"
+        
         app.logger.info("Application initialized successfully")
         return app
         

@@ -5,7 +5,7 @@ Handles SAML authentication flows and service provider integration.
 import logging
 import os
 import base64
-from flask import current_app, request, url_for, session, redirect, render_template
+from flask import current_app, request, url_for, session, redirect, render_template, flash
 from flask_login import current_user, login_user, logout_user
 from saml2 import BINDING_HTTP_POST, BINDING_HTTP_REDIRECT
 from saml2.client import Saml2Client
@@ -15,6 +15,8 @@ from saml2.saml import NAMEID_FORMAT_EMAILADDRESS as NAMEID_FORMAT_EMAIL, NAMEID
 from .saml_config import SAMLConfig
 from .saml_metadata import SAMLMetadata
 from .saml_response import SAMLResponseBuilder
+from .jenkins_saml import JenkinsSAMLResponseBuilder
+from .github_saml import GitHubSAMLResponseBuilder
 from ..models import User, ServiceProvider
 
 class SAMLManager:
@@ -248,50 +250,103 @@ class SAMLManager:
                     if jenkins_sp:
                         sp_id = str(jenkins_sp.id)
                         logging.info(f"Using Jenkins SP with id: {sp_id}")
-                    else:
-                        any_sp = ServiceProvider.objects(protocol='saml').first()
-                        if any_sp:
-                            sp_id = str(any_sp.id)
-                            logging.info(f"No Jenkins SP found, using first available SAML SP with id: {sp_id}")
-                        else:
-                            logging.error("No SAML service providers found")
-                            return redirect(url_for('auth.login'))
             
             sp = ServiceProvider.objects(id=sp_id, protocol='saml').first()
             if not sp:
                 logging.error(f"Service Provider with ID {sp_id} not found")
                 return redirect(url_for('auth.login'))
             
-            is_aws = (sp.entity_id and 'aws' in sp.entity_id.lower()) or \
-                    (sp.name and 'aws' in sp.name.lower())
+            if not current_user.is_authenticated:
+                # Store SAML request details in session
+                session['saml_request'] = saml_request
+                session['saml_relay_state'] = relay_state
+                session['saml_sp_id'] = sp_id
+                return redirect(url_for('auth.login'))
             
-            is_jenkins = (sp.entity_id and 'jenkins' in sp.entity_id.lower()) or \
-                        (sp.name and 'jenkins' in sp.name.lower())
+            try:
+                # First URL decode the SAML request
+                import urllib.parse
+                decoded_request = urllib.parse.unquote(saml_request)
+                
+                # Then base64 decode
+                decoded_request = base64.b64decode(decoded_request)
+                
+                # Decompress the request (it's deflated)
+                import zlib
+                decoded_request = zlib.decompress(decoded_request, -15)
+                
+                # Parse the XML
+                from lxml import etree
+                # Define SAML namespaces
+                namespaces = {
+                    'samlp': 'urn:oasis:names:tc:SAML:2.0:protocol',
+                    'saml': 'urn:oasis:names:tc:SAML:2.0:assertion'
+                }
+                
+                # Create a parser that doesn't validate namespaces
+                parser = etree.XMLParser(remove_blank_text=True, recover=True)
+                root = etree.fromstring(decoded_request, parser=parser)
+                
+                # Try multiple approaches to get the request ID
+                request_id = None
+                
+                # First try: direct attribute on root
+                if root.get('ID'):
+                    request_id = root.get('ID')
+                
+                # Second try: AuthnRequest element
+                if not request_id:
+                    authn_request = root.find('.//{urn:oasis:names:tc:SAML:2.0:protocol}AuthnRequest')
+                    if authn_request is not None:
+                        request_id = authn_request.get('ID')
+                
+                # Third try: XPath with namespaces
+                if not request_id:
+                    try:
+                        request_id = root.xpath('//samlp:AuthnRequest/@ID', namespaces=namespaces)[0]
+                    except (IndexError, KeyError):
+                        pass
+                
+                if not request_id:
+                    raise ValueError("Could not find request ID in SAML request")
+                    
+                logging.info(f"Extracted request ID: {request_id}")
+                
+                if current_user.is_authenticated:
+                    if 'aws' in sp.name.lower():
+                        return self.handle_aws_login(sp_id)
+                    elif 'jenkins' in sp.name.lower():
+                        # Use Jenkins-specific response builder
+                        saml_response = JenkinsSAMLResponseBuilder.build_jenkins_response(current_user, sp, in_response_to=request_id)
+                        return render_template('auth/saml_post.html',
+                                            acs_url=sp.acs_url,
+                                            saml_response=saml_response,
+                                            relay_state=relay_state)
+                    elif 'github' in sp.name.lower():
+                        # Use GitHub-specific response builder
+                        saml_response = GitHubSAMLResponseBuilder.build_github_response(current_user, sp, in_response_to=request_id)
+                        return render_template('auth/saml_post.html',
+                                            acs_url=sp.acs_url,
+                                            saml_response=saml_response,
+                                            relay_state=relay_state)
+                    else:
+                        # Use generic response for other SPs
+                        saml_response = SAMLResponseBuilder.build_generic_response(current_user, sp, in_response_to=request_id)
+                        return render_template('auth/saml_post.html',
+                                            acs_url=sp.acs_url,
+                                            saml_response=saml_response,
+                                            relay_state=relay_state)
+                
+                session['saml_request_id'] = request_id
+                session['saml_relay_state'] = relay_state
+                session['saml_sp_id'] = sp_id
+                
+                return redirect(url_for('auth.login'))
+            except Exception as e:
+                logging.error(f"Error decoding SAML request: {str(e)}")
+                return redirect(url_for('auth.login'))
             
-            if is_aws:
-                saml_response = SAMLResponseBuilder.build_aws_response(current_user, sp)
-                template = 'auth/aws_post.html'
-            elif is_jenkins:
-                saml_response = SAMLResponseBuilder.build_jenkins_response(current_user, sp)
-                template = 'auth/jenkins_post.html'
-            else:
-                saml_response = SAMLResponseBuilder.build_aws_response(current_user, sp)
-                template = 'auth/aws_post.html'
-            
-            clean_acs_url = sp.acs_url.strip() if sp.acs_url else ''
-            if is_aws and 'signin.aws.amazon.com' in clean_acs_url and ',' in clean_acs_url:
-                clean_acs_url = clean_acs_url.split(',')[0].strip()
-            
-            logging.info(f"[SAML] Posting SAML response to: {clean_acs_url}")
-            
-            from flask import Response
-            response = render_template(template, 
-                                      acs_url=clean_acs_url, 
-                                      saml_response=saml_response,
-                                      relay_state=relay_state)
-            if not isinstance(response, Response):
-                response = Response(response, mimetype='text/html')
-            return response
+            return redirect(url_for('auth.login'))
         except Exception as e:
             logging.error(f"Error processing SAML SSO request: {str(e)}")
             return redirect(url_for('auth.login'))
@@ -480,3 +535,4 @@ class SAMLManager:
         except Exception as e:
             logging.error(f"Error building Jenkins SAML response: {str(e)}")
             return redirect(url_for('main.dashboard'))
+

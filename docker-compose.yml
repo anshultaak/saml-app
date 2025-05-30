@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    ports:
+      - "5002:5000"
+    volumes:
+      - .:/app
+      - ./certs:/app/certs
+    environment:
+      - FLASK_APP=app.py
+      - FLASK_ENV=development
+      - MONGODB_URI=mongodb://mongo:27017/sso
+      - SECRET_KEY=${SECRET_KEY:-your-secret-key-change-in-production}
+      - SAML_ENTITY_ID=${SAML_ENTITY_ID:-https://localhost:5002}
+      - SAML_BASE_URL=${SAML_BASE_URL:-https://localhost:5002}
+      - OIDC_ISSUER=${OIDC_ISSUER:-https://localhost:5002}
+      - SAML_CERT_PATH=${SAML_CERT_PATH:-certs/sp.crt}
+      - SAML_KEY_PATH=${SAML_KEY_PATH:-certs/sp.key}
+    depends_on:
+      - mongo
+    command: flask run --host=0.0.0.0
+
+  mongo:
+    image: mongo:6.0
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    environment:
+      - MONGO_INITDB_DATABASE=sso
+
+volumes:
+  mongo_data:

@@ -1,0 +1,263 @@
+{% extends "base.html" %}
+
+{% block title %}{% if provider %}Edit{% else %}Add{% endif %} Provider - SSO Service{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">{% if provider %}Edit{% else %}Add{% endif %} Service Provider</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <a href="{{ url_for('admin_providers') }}" class="btn btn-secondary">
+            <i class="bi bi-arrow-left"></i> Back to Providers
+        </a>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <form method="POST" id="providerForm">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="bi bi-gear"></i> Basic Information</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="name" class="form-label">Name *</label>
+                                <input type="text" class="form-control" id="name" name="name" 
+                                       value="{{ provider.name if provider else '' }}" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="provider_type" class="form-label">Provider Type *</label>
+                                <select class="form-select" id="provider_type" name="provider_type" required>
+                                    <option value="">Select provider type...</option>
+                                    <option value="aws"{% if provider and provider.provider_type == 'aws' %} selected{% endif %}>AWS</option>
+                                    <option value="jenkins"{% if provider and provider.provider_type == 'jenkins' %} selected{% endif %}>Jenkins</option>
+                                    <option value="github"{% if provider and provider.provider_type == 'github' %} selected{% endif %}>GitHub</option>
+                                    <option value="generic"{% if provider and provider.provider_type == 'generic' %} selected{% endif %}>Generic SAML</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Description</label>
+                        <textarea class="form-control" id="description" name="description" rows="2">{{ provider.description if provider else '' }}</textarea>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="protocol" class="form-label">Protocol *</label>
+                                <select class="form-select" id="protocol" name="protocol" required>
+                                    <option value="saml"{% if provider and provider.protocol == 'saml' %} selected{% endif %}>SAML 2.0</option>
+                                    <option value="oidc"{% if provider and provider.protocol == 'oidc' %} selected{% endif %}>OpenID Connect</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <div class="form-check form-switch mt-4">
+                                    <input class="form-check-input" type="checkbox" id="active" name="active" 
+                                           {% if not provider or provider.active %}checked{% endif %}>
+                                    <label class="form-check-label" for="active">Active</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h5><i class="bi bi-link-45deg"></i> SAML Configuration</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label for="entity_id" class="form-label">Entity ID *</label>
+                        <input type="text" class="form-control" id="entity_id" name="entity_id" 
+                               value="{{ provider.entity_id if provider else '' }}" required>
+                        <div class="form-text">Unique identifier for this service provider</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="acs_url" class="form-label">Assertion Consumer Service URL</label>
+                        <input type="url" class="form-control" id="acs_url" name="acs_url" 
+                               value="{{ provider.acs_url if provider else '' }}">
+                        <div class="form-text">URL where SAML responses will be posted</div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="sso_url" class="form-label">SSO URL</label>
+                                <input type="url" class="form-control" id="sso_url" name="sso_url" 
+                                       value="{{ provider.sso_url if provider else '' }}">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="slo_url" class="form-label">SLO URL</label>
+                                <input type="url" class="form-control" id="slo_url" name="slo_url" 
+                                       value="{{ provider.slo_url if provider else '' }}">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="x509cert" class="form-label">X.509 Certificate</label>
+                        <textarea class="form-control" id="x509cert" name="x509cert" rows="4">{{ provider.x509cert if provider else '' }}</textarea>
+                        <div class="form-text">Public certificate for signature verification (optional)</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mt-3" id="awsConfig" style="display: none;">
+                <div class="card-header">
+                    <h5><i class="bi bi-cloud"></i> AWS Configuration</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="aws_account_id" class="form-label">Account ID</label>
+                                <input type="text" class="form-control" id="aws_account_id" name="aws_account_id" 
+                                       value="{{ provider.aws_account_id if provider else '' }}">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="aws_role" class="form-label">Role Name</label>
+                                <input type="text" class="form-control" id="aws_role" name="aws_role" 
+                                       value="{{ provider.aws_role if provider else '' }}">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="aws_provider" class="form-label">Provider Name</label>
+                                <input type="text" class="form-control" id="aws_provider" name="aws_provider" 
+                                       value="{{ provider.aws_provider if provider else '' }}">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h5><i class="bi bi-code-square"></i> Custom Configuration</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label for="custom_attributes" class="form-label">Custom Attributes (JSON)</label>
+                        <textarea class="form-control json-editor" id="custom_attributes" name="custom_attributes" rows="4">{{ provider.custom_attributes|tojson if provider and provider.custom_attributes else '{}' }}</textarea>
+                        <div class="form-text">Provider-specific configuration as JSON object</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="attribute_mapping" class="form-label">Attribute Mapping (JSON)</label>
+                        <textarea class="form-control json-editor" id="attribute_mapping" name="attribute_mapping" rows="4">{{ provider.attribute_mapping|tojson if provider and provider.attribute_mapping else '{}' }}</textarea>
+                        <div class="form-text">Custom SAML attribute mappings as JSON object. Use {user.email}, {user.username} for dynamic values.</div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="formatJSON('custom_attributes')">
+                                <i class="bi bi-code"></i> Format JSON
+                            </button>
+                        </div>
+                        <div class="col-md-6">
+                            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="formatJSON('attribute_mapping')">
+                                <i class="bi bi-code"></i> Format JSON
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-4 mb-4">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-check"></i> {% if provider %}Update{% else %}Create{% endif %} Provider
+                </button>
+                <a href="{{ url_for('admin_providers') }}" class="btn btn-secondary">Cancel</a>
+            </div>
+        </form>
+    </div>
+    
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <h6><i class="bi bi-info-circle"></i> Help</h6>
+            </div>
+            <div class="card-body">
+                <h6>Provider Types:</h6>
+                <ul class="small">
+                    <li><strong>AWS:</strong> Amazon Web Services SSO</li>
+                    <li><strong>Jenkins:</strong> Jenkins CI/CD platform</li>
+                    <li><strong>GitHub:</strong> GitHub Enterprise SSO</li>
+                    <li><strong>Generic:</strong> Standard SAML 2.0 provider</li>
+                </ul>
+                
+                <h6 class="mt-3">Custom Attributes Example:</h6>
+                <pre class="small bg-light p-2"><code>{
+  "timeout": 300,
+  "encryption": "AES256"
+}</code></pre>
+                
+                <h6 class="mt-3">Attribute Mapping Example:</h6>
+                <pre class="small bg-light p-2"><code>{
+  "email": "{user.email}",
+  "name": "{user.username}",
+  "role": "user"
+}</code></pre>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const providerTypeSelect = document.getElementById('provider_type');
+    const awsConfig = document.getElementById('awsConfig');
+    
+    function toggleAWSConfig() {
+        if (providerTypeSelect.value === 'aws') {
+            awsConfig.style.display = 'block';
+        } else {
+            awsConfig.style.display = 'none';
+        }
+    }
+    
+    providerTypeSelect.addEventListener('change', toggleAWSConfig);
+    toggleAWSConfig(); // Initial call
+});
+
+function formatJSON(fieldId) {
+    const field = document.getElementById(fieldId);
+    try {
+        const parsed = JSON.parse(field.value || '{}');
+        field.value = JSON.stringify(parsed, null, 2);
+    } catch (e) {
+        alert('Invalid JSON format');
+    }
+}
+
+// Form validation
+document.getElementById('providerForm').addEventListener('submit', function(e) {
+    const customAttrs = document.getElementById('custom_attributes').value;
+    const attrMapping = document.getElementById('attribute_mapping').value;
+    
+    try {
+        if (customAttrs) JSON.parse(customAttrs);
+        if (attrMapping) JSON.parse(attrMapping);
+    } catch (error) {
+        e.preventDefault();
+        alert('Please fix JSON formatting errors before submitting.');
+    }
+});
+</script>
+{% endblock %}

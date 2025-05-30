@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+
+{% block title %}{% if user %}Edit{% else %}Add{% endif %} User - SSO Service{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">{% if user %}Edit{% else %}Add{% endif %} User</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <a href="{{ url_for('admin_users') }}" class="btn btn-secondary">
+            <i class="bi bi-arrow-left"></i> Back to Users
+        </a>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="bi bi-person"></i> User Information</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" id="userForm">
+                    <div class="mb-3">
+                        <label for="username" class="form-label">Username *</label>
+                        <input type="text" class="form-control" id="username" name="username" 
+                               value="{{ user.username if user else '' }}" required>
+                        <div class="form-text">Must be unique across all users</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="email" class="form-label">Email *</label>
+                        <input type="email" class="form-control" id="email" name="email" 
+                               value="{{ user.email if user else '' }}" required>
+                        <div class="form-text">Must be a valid email address</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="password" class="form-label">Password {% if not user %}*{% endif %}</label>
+                        <input type="password" class="form-control" id="password" name="password" 
+                               {% if not user %}required{% endif %}>
+                        <div class="form-text">
+                            {% if user %}
+                            Leave blank to keep current password
+                            {% else %}
+                            Minimum 6 characters recommended
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="confirm_password" class="form-label">Confirm Password {% if not user %}*{% endif %}</label>
+                        <input type="password" class="form-control" id="confirm_password" name="confirm_password" 
+                               {% if not user %}required{% endif %}>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="is_admin" name="is_admin" 
+                                           {% if user and user.is_admin %}checked{% endif %}>
+                                    <label class="form-check-label" for="is_admin">
+                                        <strong>Administrator</strong>
+                                    </label>
+                                </div>
+                                <div class="form-text">Can manage providers and users</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="active" name="active" 
+                                           {% if not user or user.active %}checked{% endif %}>
+                                    <label class="form-check-label" for="active">
+                                        <strong>Active</strong>
+                                    </label>
+                                </div>
+                                <div class="form-text">Can log in to the system</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-4">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check"></i> {% if user %}Update{% else %}Create{% endif %} User
+                        </button>
+                        <a href="{{ url_for('admin_users') }}" class="btn btn-secondary">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <h6><i class="bi bi-info-circle"></i> User Roles</h6>
+            </div>
+            <div class="card-body">
+                <h6>Administrator:</h6>
+                <ul class="small">
+                    <li>Can create, edit, and delete service providers</li>
+                    <li>Can manage all user accounts</li>
+                    <li>Has access to admin dashboard</li>
+                    <li>Can configure SAML settings</li>
+                </ul>
+                
+                <h6 class="mt-3">Regular User:</h6>
+                <ul class="small">
+                    <li>Can log in through SSO providers</li>
+                    <li>Can view available service providers</li>
+                    <li>Limited to basic dashboard access</li>
+                </ul>
+                
+                <div class="alert alert-warning mt-3">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    <strong>Note:</strong> Admin users have full system access. Grant admin privileges carefully.
+                </div>
+            </div>
+        </div>
+        
+        {% if user %}
+        <div class="card mt-3">
+            <div class="card-header">
+                <h6><i class="bi bi-clock-history"></i> Account Details</h6>
+            </div>
+            <div class="card-body">
+                <p><strong>Created:</strong> {{ user.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</p>
+                <p><strong>User ID:</strong> <code>{{ user.id }}</code></p>
+                {% if user.get_identities() %}
+                <p><strong>External Identities:</strong></p>
+                <ul class="small">
+                    {% for identity in user.get_identities() %}
+                    <li>{{ identity.provider }}: {{ identity.provider_user_id }}</li>
+                    {% endfor %}
+                </ul>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('userForm').addEventListener('submit', function(e) {
+    const password = document.getElementById('password').value;
+    const confirmPassword = document.getElementById('confirm_password').value;
+    
+    if (password !== confirmPassword) {
+        e.preventDefault();
+        alert('Passwords do not match. Please try again.');
+        return false;
+    }
+    
+    {% if not user %}
+    if (password.length < 6) {
+        e.preventDefault();
+        alert('Password must be at least 6 characters long.');
+        return false;
+    }
+    {% endif %}
+});
+</script>
+{% endblock %}

@@ -37,7 +37,7 @@
                 </td>
                 <td>
                     <span class="badge bg-{% if provider.provider_type == 'aws' %}warning{% elif provider.provider_type == 'jenkins' %}info{% elif provider.provider_type == 'github' %}dark{% else %}secondary{% endif %}">
-                        {{ provider.provider_type.upper() }}
+                        {{ provider.provider_type.upper() if provider.provider_type else 'UNKNOWN' }}
                     </span>
                 </td>
                 <td>{{ provider.protocol.upper() }}</td>

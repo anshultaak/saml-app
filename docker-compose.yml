@@ -13,9 +13,9 @@ services:
       - FLASK_ENV=development
       - MONGODB_URI=mongodb://mongo:27017/sso
       - SECRET_KEY=${SECRET_KEY:-your-secret-key-change-in-production}
-      - SAML_ENTITY_ID=${SAML_ENTITY_ID:-https://localhost:5002}
-      - SAML_BASE_URL=${SAML_BASE_URL:-https://localhost:5002}
-      - OIDC_ISSUER=${OIDC_ISSUER:-https://localhost:5002}
+      - SAML_ENTITY_ID=${SAML_ENTITY_ID:-https://13.203.99.201}
+      - SAML_BASE_URL=${SAML_BASE_URL:-https://13.203.99.201}
+      - OIDC_ISSUER=${OIDC_ISSUER:-https://13.203.99.201}
       - SAML_CERT_PATH=${SAML_CERT_PATH:-certs/sp.crt}
       - SAML_KEY_PATH=${SAML_KEY_PATH:-certs/sp.key}
     depends_on:

@@ -80,7 +80,7 @@
                                     {% endif %}
                                 </td>
                                 <td>
-                                    <a href="#" 
+                                    <a href="{{ url_for('auth.saml_login', sp_id=provider.id) }}" 
                                        class="btn btn-sm btn-primary">
                                         <i class="bi bi-box-arrow-in-right"></i> Login
                                     </a>

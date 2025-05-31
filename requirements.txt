@@ -8,3 +8,4 @@ python-dotenv==1.0.0
 Werkzeug==2.3.7
 cryptography==41.0.4
 lxml==4.9.3
+pysaml2==7.4.0

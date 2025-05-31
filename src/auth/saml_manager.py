@@ -7,6 +7,8 @@ import os
 import base64
 from flask import current_app, request, url_for, session, redirect, render_template
 from flask_login import current_user, login_user, logout_user
+import uuid
+import datetime
 try:
     from saml2 import BINDING_HTTP_POST, BINDING_HTTP_REDIRECT
     from saml2.client import Saml2Client
@@ -243,9 +245,9 @@ class SAMLManager:
             Response: Flask response.
         """
         try:
+            logging.info(f"[SAML] process_sso_request called with saml_request: {saml_request[:100] if saml_request else None}")
             if saml_request:
                 logging.info(f"Processing SP-initiated SAML request for SP: {sp_id}")
-                
                 if not sp_id:
                     jenkins_sp = ServiceProvider.objects(name__icontains='jenkins', protocol='saml').first()
                     if jenkins_sp:
@@ -259,20 +261,41 @@ class SAMLManager:
                         else:
                             logging.error("No SAML service providers found")
                             return redirect(url_for('auth.login'))
-            
             sp = ServiceProvider.objects(id=sp_id, protocol='saml').first()
             if not sp:
                 logging.error(f"Service Provider with ID {sp_id} not found")
                 return redirect(url_for('auth.login'))
-            
             handler = provider_registry.get_handler(sp)
-            saml_response = handler.build_saml_response(current_user, sp)
+            in_response_to = None
+            # Only extract and pass in_response_to for github
+            if handler.get_provider_type() == 'github' and saml_request:
+                try:
+                    import base64
+                    from lxml import etree
+                    import zlib
+                    import urllib.parse
+                    logging.info(f"[SAML] Processing GitHub SAML request: {saml_request[:100]}...")
+                    saml_request_decoded = base64.b64decode(saml_request)
+                    try:
+                        saml_request_xml = zlib.decompress(saml_request_decoded, -15)
+                        logging.info("[SAML] Successfully decompressed SAML request (HTTP-Redirect binding)")
+                    except Exception:
+                        saml_request_xml = saml_request_decoded
+                        logging.info("[SAML] Using SAML request as-is (HTTP-POST binding)")
+                    logging.info(f"[SAML] Decoded SAML request XML: {saml_request_xml.decode('utf-8')}")
+                    root = etree.fromstring(saml_request_xml)
+                    in_response_to = root.get('ID')
+                    logging.info(f"[SAML] Extracted InResponseTo ID: {in_response_to}")
+                except Exception as e:
+                    logging.error(f"Failed to extract InResponseTo from SAMLRequest: {str(e)}", exc_info=True)
+            if handler.get_provider_type() == 'github':
+                logging.info(f"[SAML] Building GitHub SAML response with InResponseTo: {in_response_to}")
+                saml_response = handler.build_saml_response(current_user, sp, in_response_to=in_response_to)
+            else:
+                saml_response = handler.build_saml_response(current_user, sp)
             template = handler.get_template_name()
-            
             clean_acs_url = handler.process_acs_url(sp.acs_url, sp)
-            
             logging.info(f"[SAML] Posting SAML response to: {clean_acs_url}")
-            
             from flask import Response
             response = render_template(template, 
                                       acs_url=clean_acs_url, 
@@ -437,3 +460,190 @@ class SAMLManager:
         except Exception as e:
             logging.error(f"Error building {handler.get_provider_type()} SAML response: {str(e)}")
             return redirect(url_for('main.dashboard'))
+
+    @staticmethod
+    def build_github_response(user, sp, in_response_to=None):
+        logging.info(f"[SAML] Building SAML Response for GitHub user: {user.email}")
+        issuer_value = SAMLConfig.get_entity_id()
+        response_id = f"_{uuid.uuid4()}"
+        assertion_id = f"_{uuid.uuid4()}"
+        now = datetime.datetime.utcnow()
+        not_on_or_after = now + datetime.timedelta(minutes=5)
+
+        nsmap = {
+            'samlp': "urn:oasis:names:tc:SAML:2.0:protocol",
+            'saml': "urn:oasis:names:tc:SAML:2.0:assertion",
+            'ds': "http://www.w3.org/2000/09/xmldsig#",
+            'ec': "http://www.w3.org/2001/10/xml-exc-c14n#"
+        }
+        for prefix, uri in nsmap.items():
+            etree.register_namespace(prefix, uri)
+
+        # Build the Response
+        response_attrs = {
+            "ID": response_id,
+            "Version": "2.0",
+            "IssueInstant": now.strftime('%Y-%m-%dT%H:%M:%S.%fZ'),
+            "Destination": sp.acs_url.strip()
+        }
+        if in_response_to:
+            response_attrs["InResponseTo"] = in_response_to
+        root = etree.Element("{urn:oasis:names:tc:SAML:2.0:protocol}Response", attrib=response_attrs, nsmap=nsmap)
+
+        # Add Issuer
+        response_issuer = etree.SubElement(root, "{urn:oasis:names:tc:SAML:2.0:assertion}Issuer")
+        response_issuer.text = issuer_value
+
+        # Add Status
+        status = etree.SubElement(root, "{urn:oasis:names:tc:SAML:2.0:protocol}Status")
+        status_code = etree.SubElement(status, "{urn:oasis:names:tc:SAML:2.0:protocol}StatusCode")
+        status_code.set("Value", "urn:oasis:names:tc:SAML:2.0:status:Success")
+
+        # Build Assertion
+        assertion_attrs = {
+            "ID": assertion_id,
+            "IssueInstant": now.strftime('%Y-%m-%dT%H:%M:%S.%fZ'),
+            "Version": "2.0"
+        }
+        assertion = etree.Element("{urn:oasis:names:tc:SAML:2.0:assertion}Assertion", attrib=assertion_attrs)
+
+        # Assertion Issuer
+        assertion_issuer = etree.SubElement(assertion, "{urn:oasis:names:tc:SAML:2.0:assertion}Issuer")
+        assertion_issuer.text = issuer_value
+
+        # Subject
+        subject = etree.SubElement(assertion, "{urn:oasis:names:tc:SAML:2.0:assertion}Subject")
+        name_id = etree.SubElement(subject, "{urn:oasis:names:tc:SAML:2.0:assertion}NameID")
+        name_id.set("Format", "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress")
+        name_id.text = user.email
+        subject_confirmation = etree.SubElement(subject, "{urn:oasis:names:tc:SAML:2.0:assertion}SubjectConfirmation")
+        subject_confirmation.set("Method", "urn:oasis:names:tc:SAML:2.0:cm:bearer")
+        confirmation_data = etree.SubElement(subject_confirmation, "{urn:oasis:names:tc:SAML:2.0:assertion}SubjectConfirmationData")
+        confirmation_data.set("NotOnOrAfter", not_on_or_after.strftime('%Y-%m-%dT%H:%M:%S.%fZ'))
+        confirmation_data.set("Recipient", sp.acs_url.strip())
+        if in_response_to:
+            confirmation_data.set("InResponseTo", in_response_to)
+
+        # Conditions
+        conditions = etree.SubElement(assertion, "{urn:oasis:names:tc:SAML:2.0:assertion}Conditions")
+        conditions.set("NotBefore", now.strftime('%Y-%m-%dT%H:%M:%S.%fZ'))
+        conditions.set("NotOnOrAfter", not_on_or_after.strftime('%Y-%m-%dT%H:%M:%S.%fZ'))
+        audience_restriction = etree.SubElement(conditions, "{urn:oasis:names:tc:SAML:2.0:assertion}AudienceRestriction")
+        audience = etree.SubElement(audience_restriction, "{urn:oasis:names:tc:SAML:2.0:assertion}Audience")
+        audience.text = sp.entity_id.strip()
+
+        # AuthnStatement
+        authn_statement = etree.SubElement(assertion, "{urn:oasis:names:tc:SAML:2.0:assertion}AuthnStatement")
+        authn_statement.set("AuthnInstant", now.strftime('%Y-%m-%dT%H:%M:%S.%fZ'))
+        authn_context = etree.SubElement(authn_statement, "{urn:oasis:names:tc:SAML:2.0:assertion}AuthnContext")
+        authn_context_class_ref = etree.SubElement(authn_context, "{urn:oasis:names:tc:SAML:2.0:assertion}AuthnContextClassRef")
+        authn_context_class_ref.text = "urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport"
+
+        # AttributeStatement
+        attribute_statement = etree.SubElement(assertion, "{urn:oasis:names:tc:SAML:2.0:assertion}AttributeStatement")
+        login_attr = etree.SubElement(attribute_statement, "{urn:oasis:names:tc:SAML:2.0:assertion}Attribute")
+        login_attr.set("Name", "login")
+        login_attr.set("NameFormat", "urn:oasis:names:tc:SAML:2.0:attrname-format:basic")
+        login_value = etree.SubElement(login_attr, "{urn:oasis:names:tc:SAML:2.0:assertion}AttributeValue")
+        login_value.text = user.username
+        email_attr = etree.SubElement(attribute_statement, "{urn:oasis:names:tc:SAML:2.0:assertion}Attribute")
+        email_attr.set("Name", "email")
+        email_attr.set("NameFormat", "urn:oasis:names:tc:SAML:2.0:attrname-format:basic")
+        email_value = etree.SubElement(email_attr, "{urn:oasis:names:tc:SAML:2.0:assertion}AttributeValue")
+        email_value.text = user.email
+        name_attr = etree.SubElement(attribute_statement, "{urn:oasis:names:tc:SAML:2.0:assertion}Attribute")
+        name_attr.set("Name", "name")
+        name_attr.set("NameFormat", "urn:oasis:names:tc:SAML:2.0:attrname-format:basic")
+        name_value = etree.SubElement(name_attr, "{urn:oasis:names:tc:SAML:2.0:assertion}AttributeValue")
+        name_value.text = user.username
+
+        # Sign the Assertion
+        assertion_xml = etree.tostring(assertion, encoding='unicode')
+        key_path = SAMLConfig.get_key_path()
+        signed_assertion = SAMLResponseBuilder._sign_xml(assertion_xml, key_path)
+        signed_assertion_elem = etree.fromstring(signed_assertion)
+
+        # Replace the original assertion with the signed one
+        root.append(signed_assertion_elem)
+
+        # Convert final response to string
+        final_xml = etree.tostring(root, encoding='unicode')
+        logging.info(f"[SAML] Final SAML Response XML for GitHub: \n{final_xml}")
+
+        return base64.b64encode(final_xml.encode('utf-8')).decode('utf-8')
+
+    @staticmethod
+    def _sign_assertion_xml(assertion_xml, key_file):
+        try:
+            with open(key_file, 'rb') as key_file_obj:
+                private_key_data = key_file_obj.read()
+
+            assertion = etree.fromstring(assertion_xml)
+            assertion_id = assertion.get('ID')
+
+            # Create signature element
+            ns = {'ds': 'http://www.w3.org/2000/09/xmldsig#'}
+            signature = etree.Element("{http://www.w3.org/2000/09/xmldsig#}Signature", nsmap={'ds': ns['ds']})
+
+            signed_info = etree.SubElement(signature, "{http://www.w3.org/2000/09/xmldsig#}SignedInfo")
+            canon_method = etree.SubElement(signed_info, "{http://www.w3.org/2000/09/xmldsig#}CanonicalizationMethod")
+            canon_method.set("Algorithm", "http://www.w3.org/2001/10/xml-exc-c14n#")
+            sig_method = etree.SubElement(signed_info, "{http://www.w3.org/2000/09/xmldsig#}SignatureMethod")
+            sig_method.set("Algorithm", "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256")
+            reference = etree.SubElement(signed_info, "{http://www.w3.org/2000/09/xmldsig#}Reference")
+            reference.set("URI", f"#{assertion_id}")
+
+            transforms = etree.SubElement(reference, "{http://www.w3.org/2000/09/xmldsig#}Transforms")
+            transform = etree.SubElement(transforms, "{http://www.w3.org/2000/09/xmldsig#}Transform")
+            transform.set("Algorithm", "http://www.w3.org/2000/09/xmldsig#enveloped-signature")
+            transform2 = etree.SubElement(transforms, "{http://www.w3.org/2001/10/xml-exc-c14n#}Transform")
+            transform2.set("Algorithm", "http://www.w3.org/2001/10/xml-exc-c14n#")
+
+            digest_method = etree.SubElement(reference, "{http://www.w3.org/2000/09/xmldsig#}DigestMethod")
+            digest_method.set("Algorithm", "http://www.w3.org/2001/04/xmlenc#sha256")
+            digest_value = etree.SubElement(reference, "{http://www.w3.org/2000/09/xmldsig#}DigestValue")
+
+            # Canonicalize the assertion without the signature
+            assertion_copy = etree.fromstring(etree.tostring(assertion))
+            signature_elem = assertion_copy.find('.//{http://www.w3.org/2000/09/xmldsig#}Signature')
+            if signature_elem is not None:
+                assertion_copy.remove(signature_elem)
+            canonicalized_xml = etree.tostring(assertion_copy, method='c14n', exclusive=True)
+            digest = hashes.Hash(hashes.SHA256())
+            digest.update(canonicalized_xml)
+            digest_result = digest.finalize()
+            digest_value.text = base64.b64encode(digest_result).decode('utf-8')
+
+            signature_value = etree.SubElement(signature, "{http://www.w3.org/2000/09/xmldsig#}SignatureValue")
+            signed_info_xml = etree.tostring(signed_info, method='c14n', exclusive=True)
+            private_key = load_pem_private_key(private_key_data, password=None)
+            signature_bytes = private_key.sign(
+                signed_info_xml,
+                padding.PKCS1v15(),
+                hashes.SHA256()
+            )
+            signature_value.text = base64.b64encode(signature_bytes).decode('utf-8')
+
+            key_info = etree.SubElement(signature, "{http://www.w3.org/2000/09/xmldsig#}KeyInfo")
+            x509_data = etree.SubElement(key_info, "{http://www.w3.org/2000/09/xmldsig#}X509Data")
+            x509_cert = etree.SubElement(x509_data, "{http://www.w3.org/2000/09/xmldsig#}X509Certificate")
+            cert_path = SAMLConfig.get_cert_path()
+            with open(cert_path, 'rb') as cert_file:
+                cert_data = cert_file.read()
+            cert_text = cert_data.decode('utf-8')
+            cert_text = cert_text.replace('-----BEGIN CERTIFICATE-----', '')
+            cert_text = cert_text.replace('-----END CERTIFICATE-----', '')
+            cert_text = cert_text.replace('\n', '')
+            x509_cert.text = cert_text
+
+            # Insert signature after Issuer
+            issuer = assertion.find('{urn:oasis:names:tc:SAML:2.0:assertion}Issuer')
+            if issuer is not None:
+                issuer.addnext(signature)
+            else:
+                assertion.insert(0, signature)
+
+            return etree.tostring(assertion, encoding='unicode')
+        except Exception as e:
+            logging.error(f"Error signing Assertion XML: {str(e)}")
+            return assertion_xml

@@ -147,6 +147,11 @@ def saml_github(sp_id):
 def saml_sso(sp_id=None):
     """SAML Single Sign-On Service endpoint"""
     try:
+        # Add detailed logging for debugging
+        logging.info(f"Full request URL: {request.url}")
+        logging.info(f"Request args: {request.args}")
+        logging.info(f"Request form: {request.form}")
+
         saml_request = request.args.get('SAMLRequest') or request.form.get('SAMLRequest')
         relay_state = request.args.get('RelayState') or request.form.get('RelayState')
         sig_alg = request.args.get('SigAlg') or request.form.get('SigAlg')
@@ -162,6 +167,7 @@ def saml_sso(sp_id=None):
         elif sp_id:
             return saml_manager.process_sso_request(sp_id, relay_state)
         else:
+            logging.error(f"Invalid SAML request: No SAMLRequest parameter found. URL: {request.url}, args: {request.args}, form: {request.form}")
             flash('Invalid SAML request')
             return redirect(url_for('auth.login'))
     except Exception as e:

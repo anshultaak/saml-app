@@ -16,7 +16,7 @@ class SAMLConfig:
         Returns:
             str: The entity ID.
         """
-        return os.environ.get('SAML_ENTITY_ID', 'https://sso.wellnesscoach.live')
+        return os.environ.get('SAML_ENTITY_ID', 'https://13.203.99.201')
     
     @staticmethod
     def get_cert_path():
@@ -27,7 +27,7 @@ class SAMLConfig:
             str: Path to the certificate file.
         """
         base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        return os.path.join(base_dir, 'certs', 'saml.crt')
+        return os.path.join(base_dir, 'certs', 'sp.crt')
     
     @staticmethod
     def get_key_path():
@@ -38,7 +38,7 @@ class SAMLConfig:
             str: Path to the private key file.
         """
         base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        return os.path.join(base_dir, 'certs', 'saml.key')
+        return os.path.join(base_dir, 'certs', 'sp.key')
     
     @staticmethod
     def get_base_url():
@@ -48,7 +48,7 @@ class SAMLConfig:
         Returns:
             str: The base URL.
         """
-        return os.environ.get('SAML_BASE_URL', 'https://sso.wellnesscoach.live')
+        return os.environ.get('SAML_BASE_URL', 'https://13.203.99.201')
     
     @staticmethod
     def get_metadata_url():
@@ -59,4 +59,4 @@ class SAMLConfig:
             str: The metadata URL.
         """
         base_url = SAMLConfig.get_base_url()
-        return f"{base_url}/auth/metadata"
+        return f"{base_url}/auth/saml/metadata.xml"

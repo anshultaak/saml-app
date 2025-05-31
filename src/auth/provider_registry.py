@@ -100,9 +100,9 @@ class GitHubProviderHandler(ProviderHandler):
                (sp.entity_id and 'github' in sp.entity_id.lower()) or \
                (sp.name and 'github' in sp.name.lower())
     
-    def build_saml_response(self, user, sp) -> str:
+    def build_saml_response(self, user, sp, in_response_to=None) -> str:
         from .saml_response import SAMLResponseBuilder
-        return SAMLResponseBuilder.build_github_response(user, sp)
+        return SAMLResponseBuilder.build_github_response(user, sp, in_response_to=in_response_to)
     
     def get_template_name(self) -> str:
         return 'auth/github_post.html'

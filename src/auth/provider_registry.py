@@ -125,6 +125,27 @@ class GenericProviderHandler(ProviderHandler):
         return 'auth/generic_post.html'
 
 
+class GitLabProviderHandler(ProviderHandler):
+    """Handler for GitLab SSO integration."""
+    def get_provider_type(self) -> str:
+        return 'gitlab'
+
+    def detect_provider(self, sp) -> bool:
+        return (sp.provider_type and sp.provider_type.lower() == 'gitlab') or \
+               (sp.entity_id and 'gitlab' in sp.entity_id.lower()) or \
+               (sp.name and 'gitlab' in sp.name.lower())
+
+    def build_saml_response(self, user, sp) -> str:
+        from .saml_response import SAMLResponseBuilder
+        return SAMLResponseBuilder.build_gitlab_response(user, sp)
+
+    def get_template_name(self) -> str:
+        return 'auth/gitlab_post.html'
+
+    def process_acs_url(self, acs_url: str, sp) -> str:
+        return acs_url.strip() if acs_url else ''
+
+
 class ProviderRegistry:
     """Registry for managing provider handlers."""
     
@@ -138,6 +159,7 @@ class ProviderRegistry:
         self.register_handler(JenkinsProviderHandler())
         self.register_handler(GitHubProviderHandler())
         self.register_handler(GenericProviderHandler())  # Must be last (fallback)
+        self.register_handler(GitLabProviderHandler())
     
     def register_handler(self, handler: ProviderHandler):
         """Register a new provider handler."""

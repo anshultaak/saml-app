@@ -36,6 +36,7 @@
                                     <option value="aws"{% if provider and provider.provider_type == 'aws' %} selected{% endif %}>AWS</option>
                                     <option value="jenkins"{% if provider and provider.provider_type == 'jenkins' %} selected{% endif %}>Jenkins</option>
                                     <option value="github"{% if provider and provider.provider_type == 'github' %} selected{% endif %}>GitHub</option>
+                                    <option value="gitlab"{% if provider and provider.provider_type == 'gitlab' %} selected{% endif %}>GitLab</option>
                                     <option value="generic"{% if provider and provider.provider_type == 'generic' %} selected{% endif %}>Generic SAML</option>
                                 </select>
                             </div>
@@ -204,6 +205,7 @@
                     <li><strong>AWS:</strong> Amazon Web Services SSO</li>
                     <li><strong>Jenkins:</strong> Jenkins CI/CD platform</li>
                     <li><strong>GitHub:</strong> GitHub Enterprise SSO</li>
+                    <li><strong>GitLab:</strong> GitLab SSO</li>
                     <li><strong>Generic:</strong> Standard SAML 2.0 provider</li>
                 </ul>
                 

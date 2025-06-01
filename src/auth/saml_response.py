@@ -171,16 +171,7 @@ class SAMLResponseBuilder:
         Returns:
             str: Base64-encoded SAML response XML.
         """
-        if not (sp.aws_role and sp.aws_provider and sp.aws_account_id):
-            logging.error(f"AWS role, provider, or account ID not configured for {sp.name}")
-            raise ValueError(f"AWS role not configured for {sp.name}")
-            
-        role_arn = f"arn:aws:iam::{sp.aws_account_id}:role/{sp.aws_role}"
-        provider_arn = f"arn:aws:iam::{sp.aws_account_id}:saml-provider/{sp.aws_provider}"
-        aws_role = f"{role_arn},{provider_arn}"
-        role_session_name = user.email or user.username
-        
-        logging.info(f"[SAML] Building SAML Response for user: {user.email}, aws_role: {aws_role}, role_session_name: {role_session_name}")
+        logging.info(f"[SAML] Building SAML Response for user: {user.email}")
         logging.info(f"[SAML] SP entity_id: {sp.entity_id}, ACS URL: {sp.acs_url}")
         
         issuer_value = SAMLConfig.get_entity_id()
@@ -216,14 +207,6 @@ class SAMLResponseBuilder:
               <saml:AuthnContextClassRef>urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport</saml:AuthnContextClassRef>
             </saml:AuthnContext>
           </saml:AuthnStatement>
-          <saml:AttributeStatement>
-            <saml:Attribute Name="https://aws.amazon.com/SAML/Attributes/Role">
-              <saml:AttributeValue>{aws_role}</saml:AttributeValue>
-            </saml:Attribute>
-            <saml:Attribute Name="https://aws.amazon.com/SAML/Attributes/RoleSessionName">
-              <saml:AttributeValue>{role_session_name}</saml:AttributeValue>
-            </saml:Attribute>
-          </saml:AttributeStatement>
         </saml:Assertion>
         
         </samlp:Response>
@@ -521,4 +504,85 @@ class SAMLResponseBuilder:
             return base64.b64encode(signed_response.encode('utf-8')).decode('utf-8')
         except Exception as e:
             logging.error(f"[SAML] Error signing SAML response: {str(e)}")
+            return base64.b64encode(response_xml.encode('utf-8')).decode('utf-8')
+
+    @staticmethod
+    def build_gitlab_response(user, sp):
+        """
+        Build a SAML response for GitLab SSO integration.
+        Args:
+            user: The user object.
+            sp: The service provider object.
+        Returns:
+            str: Base64-encoded SAML response XML.
+        """
+        logging.info(f"[SAML] Building GitLab SAML Response for user: {user.email}")
+        issuer_value = SAMLConfig.get_entity_id()
+        response_id = f"_{uuid.uuid4()}"
+        assertion_id = f"_{uuid.uuid4()}"
+        now = datetime.datetime.utcnow()
+        not_on_or_after = now + datetime.timedelta(minutes=5)
+        persistent_id = getattr(user, 'id', None) or user.username
+        custom_attributes = ""
+        if hasattr(sp, 'attribute_mapping') and sp.attribute_mapping:
+            for attr_name, attr_value in sp.attribute_mapping.items():
+                try:
+                    value = attr_value.format(user=user)
+                except Exception:
+                    value = attr_value
+                custom_attributes += f"""
+            <saml:Attribute Name=\"{attr_name}\" NameFormat=\"urn:oasis:names:tc:SAML:2.0:attrname-format:basic\">
+              <saml:AttributeValue xmlns:xs=\"http://www.w3.org/2001/XMLSchema\"
+                                   xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"
+                                   xsi:type=\"xs:string\">{value}</saml:AttributeValue>
+            </saml:Attribute>"""
+        else:
+            custom_attributes = f"""
+            <saml:Attribute Name=\"username\" NameFormat=\"urn:oasis:names:tc:SAML:2.0:attrname-format:basic\">
+              <saml:AttributeValue xmlns:xs=\"http://www.w3.org/2001/XMLSchema\" 
+                                   xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" 
+                                   xsi:type=\"xs:string\">{user.username}</saml:AttributeValue>
+            </saml:Attribute>
+            <saml:Attribute Name=\"email\" NameFormat=\"urn:oasis:names:tc:SAML:2.0:attrname-format:basic\">
+              <saml:AttributeValue xmlns:xs=\"http://www.w3.org/2001/XMLSchema\"
+                                   xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"
+                                   xsi:type=\"xs:string\">{user.email}</saml:AttributeValue>
+            </saml:Attribute>"""
+        response_xml = f"""
+        <samlp:Response xmlns:samlp=\"urn:oasis:names:tc:SAML:2.0:protocol\" ID=\"{response_id}\" Version=\"2.0\" IssueInstant=\"{now.strftime('%Y-%m-%dT%H:%M:%S.%fZ')}\" Destination=\"{sp.acs_url}\">
+          <saml:Issuer xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\">{issuer_value}</saml:Issuer>
+          <samlp:Status>
+            <samlp:StatusCode Value=\"urn:oasis:names:tc:SAML:2.0:status:Success\"/>
+          </samlp:Status>
+          
+        <saml:Assertion xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\" ID=\"{assertion_id}\" IssueInstant=\"{now.strftime('%Y-%m-%dT%H:%M:%S.%fZ')}\" Version=\"2.0\">
+          <saml:Issuer>{issuer_value}</saml:Issuer>
+          <saml:Subject>
+            <saml:NameID Format=\"urn:oasis:names:tc:SAML:2.0:nameid-format:persistent\">{persistent_id}</saml:NameID>
+            <saml:SubjectConfirmation Method=\"urn:oasis:names:tc:SAML:2.0:cm:bearer\">
+              <saml:SubjectConfirmationData NotOnOrAfter=\"{not_on_or_after.strftime('%Y-%m-%dT%H:%M:%S.%fZ')}\" Recipient=\"{sp.acs_url}\"/>
+            </saml:SubjectConfirmation>
+          </saml:Subject>
+          <saml:Conditions NotBefore=\"{now.strftime('%Y-%m-%dT%H:%M:%S.%fZ')}\" NotOnOrAfter=\"{not_on_or_after.strftime('%Y-%m-%dT%H:%M:%S.%fZ')}\">
+            <saml:AudienceRestriction>
+              <saml:Audience>{sp.entity_id}</saml:Audience>
+            </saml:AudienceRestriction>
+          </saml:Conditions>
+          <saml:AuthnStatement AuthnInstant=\"{now.strftime('%Y-%m-%dT%H:%M:%S.%fZ')}\">
+            <saml:AuthnContext>
+              <saml:AuthnContextClassRef>urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport</saml:AuthnContextClassRef>
+            </saml:AuthnContext>
+          </saml:AuthnStatement>
+          <saml:AttributeStatement>{custom_attributes}
+          </saml:AttributeStatement>
+        </saml:Assertion>
+        
+        </samlp:Response>
+        """
+        key_path = SAMLConfig.get_key_path()
+        try:
+            signed_response = SAMLResponseBuilder._sign_xml(response_xml, key_path)
+            return base64.b64encode(signed_response.encode('utf-8')).decode('utf-8')
+        except Exception as e:
+            logging.error(f"[SAML] Error signing GitLab SAML response: {str(e)}")
             return base64.b64encode(response_xml.encode('utf-8')).decode('utf-8')

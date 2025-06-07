@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - SSO Service{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Dashboard</h1>
+</div>
+
+<div class="row">
+    <div class="col-md-4 mb-3">
+        <div class="card text-white bg-primary">
+            <div class="card-header">
+                <i class="bi bi-gear"></i> Service Providers
+            </div>
+            <div class="card-body">
+                <h4 class="card-title">{{ providers_count }}</h4>
+                <p class="card-text">Total configured providers</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4 mb-3">
+        <div class="card text-white bg-success">
+            <div class="card-header">
+                <i class="bi bi-people"></i> Users
+            </div>
+            <div class="card-body">
+                <h4 class="card-title">{{ users_count }}</h4>
+                <p class="card-text">Total registered users</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4 mb-3">
+        <div class="card text-white bg-info">
+            <div class="card-header">
+                <i class="bi bi-person-check"></i> Your Role
+            </div>
+            <div class="card-body">
+                <h4 class="card-title">{% if current_user.is_admin %}Admin{% else %}User{% endif %}</h4>
+                <p class="card-text">Current access level</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="bi bi-list"></i> Available Service Providers</h5>
+            </div>
+            <div class="card-body">
+                {% if providers %}
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Provider Type</th>
+                                <th>Protocol</th>
+                                <th>Status</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for provider in providers %}
+                            <tr>
+                                <td>{{ provider.name }}</td>
+                                <td>
+                                    <span class="badge bg-secondary">{{ provider.provider_type }}</span>
+                                </td>
+                                <td>{{ provider.protocol.upper() }}</td>
+                                <td>
+                                    {% if provider.active %}
+                                    <span class="badge bg-success">Active</span>
+                                    {% else %}
+                                    <span class="badge bg-danger">Inactive</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <a href="{{ url_for('auth.saml_login', sp_id=provider.id) }}" 
+                                       class="btn btn-sm btn-primary">
+                                        <i class="bi bi-box-arrow-in-right"></i> Login
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center text-muted">
+                    <i class="bi bi-inbox" style="font-size: 3rem;"></i>
+                    <p class="mt-2">No service providers configured yet.</p>
+                    {% if current_user.is_admin %}
+                    <a href="{{ url_for('admin_provider_new') }}" class="btn btn-primary">
+                        <i class="bi bi-plus"></i> Add Provider
+                    </a>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

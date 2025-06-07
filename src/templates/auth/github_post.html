@@ -1,0 +1,17 @@
+<form id="samlForm" action="{{ acs_url }}" method="post">
+  <input type="hidden" name="SAMLResponse" value="{{ saml_response }}">
+  {% if relay_state %}
+  <input type="hidden" name="RelayState" value="{{ relay_state }}">
+  {% endif %}
+  <noscript><input type="submit" value="Continue"></noscript>
+</form>
+<div id="redirectMessage" style="text-align: center; margin-top: 20px;">
+  <p>Redirecting to GitHub SSO login...</p>
+</div>
+<script>
+  console.log("Submitting form to GitHub at: {{ acs_url }}");
+  // Add delay to allow console logging to complete
+  setTimeout(function() {
+    document.getElementById('samlForm').submit();
+  }, 100);
+</script>
